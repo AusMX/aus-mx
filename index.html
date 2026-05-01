@@ -389,22 +389,47 @@
       transform: translateX(2px);
     }
 
-    .detail-coords {
-      font-family: var(--mono);
-      font-size: 12px;
-      color: var(--text-faint);
+    .detail-link.secondary {
+      background: var(--bg-elev-2);
+      color: var(--text);
+      border: 1px solid var(--border-strong);
+    }
+
+    .detail-link.secondary:hover {
+      background: var(--bg-elev);
+      border-color: var(--text);
+      color: var(--text);
+    }
+
+    .detail-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .detail-address {
+      font-family: var(--body);
+      font-size: 14px;
+      color: var(--text);
+      line-height: 1.5;
     }
 
     /* ---------- Map ---------- */
     #map {
       flex: 1;
-      background: #0a0a0c;
+      background: #1a1a1c;
       z-index: 1;
     }
 
     .leaflet-container {
-      background: #0a0a0c;
+      background: #1a1a1c;
       font-family: var(--body);
+    }
+
+    /* Subtle desaturation so the colourful Voyager tiles sit
+       comfortably inside the dark UI without losing readability. */
+    .leaflet-tile {
+      filter: saturate(0.75) brightness(0.95);
     }
 
     .leaflet-control-attribution {
@@ -468,7 +493,6 @@
       box-shadow: 0 0 0 2px var(--bg), 0 0 12px var(--club-glow);
     }
 
-    /* Both: track diamond outer + small club dot inner */
     .pin.pin-both .shape-club {
       width: 10px;
       height: 10px;
@@ -507,6 +531,20 @@
     }
 
     .sheet-handle { display: none; }
+
+    /* Loading note */
+    .loading-note {
+      padding: 16px 24px;
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-faint);
+      text-align: center;
+      display: none;
+    }
+
+    .loading-note.show { display: block; }
 
     /* ---------- Responsive ---------- */
     @media (max-width: 768px) {
@@ -594,6 +632,7 @@
       </div>
 
       <div class="list" id="list"></div>
+      <div class="loading-note" id="loadingNote">Locating pins…</div>
       <div class="detail" id="detail"></div>
     </aside>
 
@@ -604,131 +643,32 @@
     // ===========================================================
     // LOCATION DATA — edit this array to add/remove tracks & clubs
     //
+    // For each entry, provide either:
+    //   address: "123 Example St, Suburb STATE 1234"   (preferred)
+    // OR
+    //   coords: [latitude, longitude]                  (fallback for
+    //                                                   places without
+    //                                                   a street address)
+    //
+    // The address is converted to map coordinates automatically
+    // using OpenStreetMap's free geocoder (Nominatim). Results are
+    // cached in the visitor's browser so the conversion only happens
+    // once per address.
+    //
     // types: array — can include 'track' and/or 'club'
     //   ['track']           → a riding venue only
     //   ['club']            → a club only (no riding venue)
     //   ['track', 'club']   → operates both (e.g. Appin MX Park)
-    //
-    // Coordinates: [latitude, longitude]
-    // Tip: right-click in Google Maps → click the lat/long that pops up to copy.
     // ===========================================================
     const LOCATIONS = [
       {
         name: "Appin MX Park",
         types: ["track", "club"],
         state: "NSW",
-        coords: [-34.2014, 150.7869],
+        address: "Brian Rd, Appin NSW 2560",
         description: "Run by Appin Motorcycle Club. One of Sydney's most accessible motocross parks, with social ride days as well as senior, junior and pee-wee tracks.",
         facilities: ["Senior MX track", "Junior track", "Pee-wee track", "Social ride days", "Canteen"],
         website: "https://www.appinmxpark.com.au"
-      },
-      {
-        name: "Maitland Motorcycle Club",
-        types: ["club", "track"],
-        state: "NSW",
-        coords: [-32.7395, 151.5563],
-        description: "Hunter Valley club operating its own circuit. Hosts ProMX rounds, club racing, coaching and open practice days.",
-        facilities: ["MX track", "Club rounds", "Coaching", "Junior dev"],
-        website: ""
-      },
-      {
-        name: "Penrith District MCC",
-        types: ["club", "track"],
-        state: "NSW",
-        coords: [-33.7510, 150.6940],
-        description: "Western Sydney club with its own MX facility. Active junior development program and regular practice days.",
-        facilities: ["MX track", "Junior dev", "Club rounds", "Open practice"],
-        website: ""
-      },
-      {
-        name: "Wonthaggi MX Track",
-        types: ["track"],
-        state: "VIC",
-        coords: [-38.6079, 145.5944],
-        description: "Coastal Victorian track that has hosted rounds of the Australian ProMX Championship. Known for sandy soil and demanding layout.",
-        facilities: ["MX1/MX2 layout", "Spectator viewing", "ProMX-grade"],
-        website: ""
-      },
-      {
-        name: "Coolum Pines MX",
-        types: ["track"],
-        state: "QLD",
-        coords: [-26.5363, 153.0809],
-        description: "Sunshine Coast track with a long history of national-level events. Hardpack terrain in pine forest setting.",
-        facilities: ["Senior track", "Pee-wee track", "MX schools"],
-        website: ""
-      },
-      {
-        name: "Sunshine Coast MCC",
-        types: ["club"],
-        state: "QLD",
-        coords: [-26.6500, 153.0700],
-        description: "Active club in SE Queensland running club rounds and ride days at affiliated venues.",
-        facilities: ["Club rounds", "Junior days"],
-        website: ""
-      },
-      {
-        name: "Echo Valley MX (Toowoomba)",
-        types: ["track", "club"],
-        state: "QLD",
-        coords: [-27.5500, 151.9500],
-        description: "Toowoomba district circuit with a strong club following. Regular practice days and rounds.",
-        facilities: ["Senior track", "Junior track", "Canteen"],
-        website: ""
-      },
-      {
-        name: "Gillman MX",
-        types: ["track"],
-        state: "SA",
-        coords: [-34.8200, 138.5500],
-        description: "Adelaide's premier metropolitan motocross venue. Run by Motorcycling SA with regular practice days and state rounds.",
-        facilities: ["Senior track", "Junior track", "Practice days"],
-        website: ""
-      },
-      {
-        name: "Murray Bridge MX",
-        types: ["track"],
-        state: "SA",
-        coords: [-35.1167, 139.2667],
-        description: "Long-running SA venue ~80km from Adelaide. Has hosted national rounds.",
-        facilities: ["MX track", "Junior track", "Practice"],
-        website: ""
-      },
-      {
-        name: "Pinjar Park (Wanneroo)",
-        types: ["track"],
-        state: "WA",
-        coords: [-31.6500, 115.8500],
-        description: "Perth's main motocross facility. Sandy WA soil, multiple track configurations and a hub for the state's racing scene.",
-        facilities: ["MX track", "Supercross track", "Mini track"],
-        website: ""
-      },
-      {
-        name: "Manjimup MX",
-        types: ["track"],
-        state: "WA",
-        coords: [-34.2406, 116.1462],
-        description: "Iconic WA track in the south-west. Home of the legendary Manjimup 15,000 endurance event.",
-        facilities: ["MX track", "Endurance event"],
-        website: ""
-      },
-      {
-        name: "Broadford State Motorcycle Sports Complex",
-        types: ["track"],
-        state: "VIC",
-        coords: [-37.2050, 145.0500],
-        description: "Multi-discipline complex an hour north of Melbourne. Includes MX, supercross, road race, dirt track and more.",
-        facilities: ["MX", "Supercross", "Multi-discipline", "MA HQ"],
-        website: ""
-      },
-      {
-        name: "Tamworth MX",
-        types: ["track"],
-        state: "NSW",
-        coords: [-31.0833, 150.9167],
-        description: "Regional NSW track popular with riders from across the New England area.",
-        facilities: ["MX track", "Junior track"],
-        website: ""
       }
     ];
 
@@ -740,7 +680,9 @@
     const markers = new Map();
 
     // ===========================================================
-    // Map setup — CartoDB Dark Matter (free, no API key)
+    // Map setup — CartoDB Voyager (free, no API key, readable at
+    // all zoom levels). A subtle CSS filter desaturates it slightly
+    // so it sits inside the dark UI without feeling jarring.
     // ===========================================================
     const map = L.map('map', {
       zoomControl: true,
@@ -748,11 +690,51 @@
       preferCanvas: true
     }).setView([-26.5, 134.5], 4);
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
       attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · © <a href="https://carto.com/attributions">CARTO</a>',
       subdomains: 'abcd',
       maxZoom: 19
     }).addTo(map);
+
+    // ===========================================================
+    // Geocoding — converts addresses to [lat, lng] coordinates
+    // using OpenStreetMap's free Nominatim service.
+    // Results are cached in localStorage so we only ever look up
+    // each address once per browser.
+    // ===========================================================
+    const GEOCODE_CACHE_KEY = 'aus-mx-geocode-v1';
+
+    function getCache() {
+      try { return JSON.parse(localStorage.getItem(GEOCODE_CACHE_KEY) || '{}'); }
+      catch (e) { return {}; }
+    }
+
+    function saveCache(cache) {
+      try { localStorage.setItem(GEOCODE_CACHE_KEY, JSON.stringify(cache)); }
+      catch (e) { /* ignore quota errors */ }
+    }
+
+    async function geocode(address) {
+      const cache = getCache();
+      if (cache[address]) return cache[address];
+
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&countrycodes=au`;
+        const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        const data = await res.json();
+        if (data && data.length > 0) {
+          const coords = [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+          const fresh = getCache();
+          fresh[address] = coords;
+          saveCache(fresh);
+          return coords;
+        }
+        console.warn('No geocoding result for:', address);
+      } catch (err) {
+        console.error('Geocoding failed for', address, err);
+      }
+      return null;
+    }
 
     // ===========================================================
     // Build a pin div for a location
@@ -769,10 +751,10 @@
       return `<div class="pin ${cls}" data-idx="${idx}">${inner}</div>`;
     }
 
-    // ===========================================================
-    // Add markers
-    // ===========================================================
-    LOCATIONS.forEach((loc, idx) => {
+    function addMarkerForLocation(idx) {
+      const loc = LOCATIONS[idx];
+      if (!loc.coords) return;
+
       const icon = L.divIcon({
         className: '',
         html: buildPinHtml(loc, idx),
@@ -783,7 +765,51 @@
       const marker = L.marker(loc.coords, { icon }).addTo(map);
       marker.on('click', () => selectLocation(idx));
       markers.set(idx, marker);
-    });
+    }
+
+    // ===========================================================
+    // Resolve coordinates for every location.
+    // ===========================================================
+    const loadingNote = document.getElementById('loadingNote');
+
+    async function resolveAllLocations() {
+      let firstLookup = true;
+
+      for (let i = 0; i < LOCATIONS.length; i++) {
+        const loc = LOCATIONS[i];
+
+        if (loc.coords) {
+          addMarkerForLocation(i);
+          continue;
+        }
+
+        if (!loc.address) {
+          console.warn('Location has neither address nor coords:', loc.name);
+          continue;
+        }
+
+        const cache = getCache();
+        if (cache[loc.address]) {
+          loc.coords = cache[loc.address];
+          addMarkerForLocation(i);
+          continue;
+        }
+
+        loadingNote.classList.add('show');
+        if (!firstLookup) {
+          await new Promise(r => setTimeout(r, 1100));
+        }
+        firstLookup = false;
+
+        const coords = await geocode(loc.address);
+        if (coords) {
+          loc.coords = coords;
+          addMarkerForLocation(i);
+        }
+      }
+
+      loadingNote.classList.remove('show');
+    }
 
     // ===========================================================
     // Render list
@@ -823,9 +849,9 @@
         });
       });
 
-      // Update marker visibility
       LOCATIONS.forEach((loc, idx) => {
         const marker = markers.get(idx);
+        if (!marker) return;
         const visible = currentFilter === 'all' || loc.types.includes(currentFilter);
         if (visible) {
           if (!map.hasLayer(marker)) marker.addTo(map);
@@ -843,7 +869,22 @@
 
       const websiteHtml = loc.website
         ? `<a href="${loc.website}" target="_blank" rel="noopener noreferrer" class="detail-link">Visit website →</a>`
-        : `<div class="detail-coords">No website on file</div>`;
+        : '';
+
+      let directionsUrl = '';
+      if (loc.address) {
+        directionsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc.address)}`;
+      } else if (loc.coords) {
+        directionsUrl = `https://www.google.com/maps/search/?api=1&query=${loc.coords[0]},${loc.coords[1]}`;
+      }
+
+      const directionsHtml = directionsUrl
+        ? `<a href="${directionsUrl}" target="_blank" rel="noopener noreferrer" class="detail-link secondary">Get directions ↗</a>`
+        : '';
+
+      const addressHtml = loc.address
+        ? `<div class="detail-address">${loc.address}</div>`
+        : `<div class="detail-address" style="color: var(--text-faint);">Address not on file</div>`;
 
       detailEl.innerHTML = `
         <button class="detail-back" id="backBtn">← Back to list</button>
@@ -865,12 +906,15 @@
           ` : ''}
 
           <div class="detail-section">
-            <div class="detail-section-title">Location</div>
-            <div class="detail-coords">${loc.coords[0].toFixed(4)}°, ${loc.coords[1].toFixed(4)}°</div>
+            <div class="detail-section-title">Address</div>
+            ${addressHtml}
           </div>
 
           <div class="detail-section">
-            ${websiteHtml}
+            <div class="detail-actions">
+              ${websiteHtml}
+              ${directionsHtml}
+            </div>
           </div>
         </div>
       `;
@@ -893,7 +937,9 @@
       detailEl.classList.add('show');
       renderDetail(idx);
 
-      map.flyTo(loc.coords, Math.max(map.getZoom(), 7), { duration: 0.6 });
+      if (loc.coords) {
+        map.flyTo(loc.coords, Math.max(map.getZoom(), 12), { duration: 0.6 });
+      }
 
       const panel = document.getElementById('panel');
       panel.classList.add('detail-mode');
@@ -942,6 +988,7 @@
     // Initial render
     // ===========================================================
     renderList();
+    resolveAllLocations();
   </script>
 </body>
 </html>
