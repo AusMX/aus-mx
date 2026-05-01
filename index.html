@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="A directory of motocross tracks and clubs across Australia." />
+  <title>aus-mx — Australian Motocross Tracks &amp; Clubs</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800;900&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <style>
+    :root {
+      --bg: #0c0c0d;
+      --bg-elev: #161617;
+      --bg-elev-2: #1f1f21;
+      --border: #2a2a2d;
+      --border-strong: #3a3a3e;
+      --text: #f4ede0;
+      --text-muted: #8a8a8f;
+      --text-faint: #5c5c61;
+      --track: #ff5b1f;
+      --track-glow: rgba(255, 91, 31, 0.35);
+      --club: #f5d547;
+      --club-glow: rgba(245, 213, 71, 0.35);
+      --display: 'Big Shoulders Display', 'Impact', sans-serif;
+      --body: 'Manrope', system-ui, sans-serif;
+      --mono: 'JetBrains Mono', ui-monospace, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body { height: 100%; overflow: hidden; }
+
+    body {
+      font-family: var(--body);
+      background: var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      display: flex;
+      flex-direction: column;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 9999;
+      opacity: 0.04;
+      mix-blend-mode: overlay;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    }
+
+    /* ---------- Header ---------- */
+    header {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      height: 64px;
+      background: var(--bg-elev);
+      border-bottom: 1px solid var(--border);
+      position: relative;
+      z-index: 1000;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: var(--text);
+    }
+
+    .brand-name {
+      font-family: var(--mono);
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1;
+    }
+
+    .brand-name em {
+      color: var(--track);
+      font-style: normal;
+    }
+
+    nav { display: flex; gap: 4px; }
+
+    nav a {
+      font-family: var(--display);
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      text-decoration: none;
+      padding: 8px 14px;
+      border: 1px solid transparent;
+      transition: all 0.15s ease;
+    }
+
+    nav a:hover { color: var(--text); border-color: var(--border-strong); }
+
+    nav a.active {
+      color: var(--track);
+      border-color: var(--track);
+    }
+
+    nav a.coming-soon::after {
+      content: 'SOON';
+      font-family: var(--mono);
+      font-size: 9px;
+      vertical-align: super;
+      margin-left: 4px;
+      color: var(--text-faint);
+      letter-spacing: 0.1em;
+    }
+
+    /* ---------- Main layout ---------- */
+    main {
+      flex: 1;
+      display: flex;
+      min-height: 0;
+      position: relative;
+    }
+
+    #panel {
+      width: 400px;
+      flex-shrink: 0;
+      background: var(--bg-elev);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .panel-header {
+      padding: 24px 24px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .panel-title {
+      font-family: var(--display);
+      font-size: 36px;
+      font-weight: 900;
+      line-height: 0.95;
+      letter-spacing: -0.01em;
+      margin-bottom: 8px;
+    }
+
+    .panel-subtitle {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+
+    .panel-subtitle .count { color: var(--track); }
+
+    .filter-pills { display: flex; gap: 6px; }
+
+    .pill {
+      flex: 1;
+      padding: 10px 12px;
+      background: transparent;
+      border: 1px solid var(--border-strong);
+      color: var(--text-muted);
+      font-family: var(--display);
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .pill:hover { border-color: var(--text-muted); color: var(--text); }
+
+    .pill.active[data-filter="all"] {
+      background: var(--text);
+      color: var(--bg);
+      border-color: var(--text);
+    }
+
+    .pill.active[data-filter="track"] {
+      background: var(--track);
+      color: var(--bg);
+      border-color: var(--track);
+    }
+
+    .pill.active[data-filter="club"] {
+      background: var(--club);
+      color: var(--bg);
+      border-color: var(--club);
+    }
+
+    .pill .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .pill[data-filter="track"] .dot { background: var(--track); }
+    .pill[data-filter="club"] .dot { background: var(--club); }
+    .pill.active .dot { background: var(--bg); }
+
+    /* ---------- List ---------- */
+    .list { flex: 1; overflow-y: auto; padding: 8px 0; }
+    .list::-webkit-scrollbar { width: 8px; }
+    .list::-webkit-scrollbar-track { background: var(--bg-elev); }
+    .list::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+
+    .item {
+      padding: 16px 24px;
+      cursor: pointer;
+      border-left: 3px solid transparent;
+      transition: all 0.15s ease;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .item:hover {
+      background: var(--bg-elev-2);
+      border-left-color: var(--border-strong);
+    }
+
+    .item.active { background: var(--bg-elev-2); }
+    .item.active[data-primary="track"] { border-left-color: var(--track); }
+    .item.active[data-primary="club"] { border-left-color: var(--club); }
+
+    .item-num {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-faint);
+      letter-spacing: 0.05em;
+      min-width: 24px;
+      padding-top: 4px;
+    }
+
+    .item-body { flex: 1; min-width: 0; }
+
+    .item-name {
+      font-family: var(--display);
+      font-size: 20px;
+      font-weight: 800;
+      line-height: 1.05;
+      margin-bottom: 6px;
+    }
+
+    .item-meta {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .badge {
+      padding: 3px 7px;
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .badge-track { background: var(--track); color: var(--bg); }
+    .badge-club { background: var(--club); color: var(--bg); }
+    .item-state { color: var(--text-faint); }
+
+    /* ---------- Detail view ---------- */
+    .detail {
+      flex: 1;
+      overflow-y: auto;
+      display: none;
+      flex-direction: column;
+    }
+
+    .detail.show { display: flex; }
+    .list.hide { display: none; }
+
+    .detail-back {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 16px 24px;
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-muted);
+      font-family: var(--display);
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: color 0.15s ease;
+      text-align: left;
+    }
+
+    .detail-back:hover { color: var(--text); }
+    .detail-content { padding: 24px; }
+
+    .detail-name {
+      font-family: var(--display);
+      font-size: 42px;
+      font-weight: 900;
+      line-height: 0.95;
+      letter-spacing: -0.01em;
+      margin-bottom: 12px;
+    }
+
+    .detail-badges {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .detail-desc {
+      font-size: 15px;
+      line-height: 1.6;
+      color: var(--text);
+      margin-bottom: 24px;
+    }
+
+    .detail-section { margin-bottom: 24px; }
+
+    .detail-section-title {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+    .chip {
+      padding: 6px 10px;
+      background: var(--bg-elev-2);
+      border: 1px solid var(--border-strong);
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.05em;
+      color: var(--text);
+    }
+
+    .detail-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 18px;
+      background: var(--track);
+      color: var(--bg);
+      text-decoration: none;
+      font-family: var(--display);
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      transition: all 0.15s ease;
+    }
+
+    .detail-link:hover {
+      background: var(--text);
+      transform: translateX(2px);
+    }
+
+    .detail-coords {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text-faint);
+    }
+
+    /* ---------- Map ---------- */
+    #map {
+      flex: 1;
+      background: #0a0a0c;
+      z-index: 1;
+    }
+
+    .leaflet-container {
+      background: #0a0a0c;
+      font-family: var(--body);
+    }
+
+    .leaflet-control-attribution {
+      background: rgba(12, 12, 13, 0.85) !important;
+      color: var(--text-faint) !important;
+      font-size: 10px !important;
+      font-family: var(--mono) !important;
+      padding: 4px 8px !important;
+    }
+
+    .leaflet-control-attribution a { color: var(--text-muted) !important; }
+
+    .leaflet-control-zoom a {
+      background: var(--bg-elev) !important;
+      color: var(--text) !important;
+      border: 1px solid var(--border-strong) !important;
+      width: 32px !important;
+      height: 32px !important;
+      line-height: 30px !important;
+      font-family: var(--display) !important;
+      font-weight: 800 !important;
+      font-size: 18px !important;
+    }
+
+    .leaflet-control-zoom a:hover {
+      background: var(--track) !important;
+      color: var(--bg) !important;
+      border-color: var(--track) !important;
+    }
+
+    /* Custom marker shapes */
+    .pin {
+      position: relative;
+      width: 28px;
+      height: 28px;
+      cursor: pointer;
+    }
+
+    .shape-track,
+    .shape-club {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .shape-track {
+      width: 24px;
+      height: 24px;
+      background: var(--track);
+      transform: translate(-50%, -50%) rotate(45deg);
+      box-shadow: 0 0 0 2px var(--bg), 0 0 12px var(--track-glow);
+    }
+
+    .shape-club {
+      width: 22px;
+      height: 22px;
+      background: var(--club);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 0 2px var(--bg), 0 0 12px var(--club-glow);
+    }
+
+    /* Both: track diamond outer + small club dot inner */
+    .pin.pin-both .shape-club {
+      width: 10px;
+      height: 10px;
+      box-shadow: 0 0 0 2px var(--bg);
+      z-index: 2;
+    }
+
+    .pin:hover .shape-track {
+      transform: translate(-50%, -50%) rotate(45deg) scale(1.3);
+      box-shadow: 0 0 0 2px var(--bg), 0 0 24px var(--track-glow);
+    }
+
+    .pin:hover .shape-club {
+      transform: translate(-50%, -50%) scale(1.3);
+      box-shadow: 0 0 0 2px var(--bg), 0 0 24px var(--club-glow);
+    }
+
+    .pin.pin-both:hover .shape-club {
+      transform: translate(-50%, -50%) scale(1.3);
+      box-shadow: 0 0 0 2px var(--bg);
+    }
+
+    .pin.active .shape-track {
+      transform: translate(-50%, -50%) rotate(45deg) scale(1.4);
+      box-shadow: 0 0 0 3px var(--text), 0 0 24px var(--track-glow);
+    }
+
+    .pin.active .shape-club {
+      transform: translate(-50%, -50%) scale(1.4);
+      box-shadow: 0 0 0 3px var(--text), 0 0 24px var(--club-glow);
+    }
+
+    .pin.pin-both.active .shape-club {
+      transform: translate(-50%, -50%) scale(1.4);
+      box-shadow: 0 0 0 2px var(--text);
+    }
+
+    .sheet-handle { display: none; }
+
+    /* ---------- Responsive ---------- */
+    @media (max-width: 768px) {
+      header { padding: 0 16px; height: 56px; }
+      .brand-name { font-size: 18px; }
+
+      nav { gap: 0; }
+      nav a { font-size: 12px; padding: 6px 10px; }
+      nav a.coming-soon { display: none; }
+
+      main { flex-direction: column; }
+
+      #map { order: 1; height: 100%; }
+
+      #panel {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        height: 55%;
+        max-height: 70vh;
+        border-right: none;
+        border-top: 1px solid var(--border);
+        z-index: 500;
+        transform: translateY(calc(100% - 100px));
+        transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+        box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.4);
+      }
+
+      #panel.expanded { transform: translateY(0); }
+      #panel.detail-mode { transform: translateY(0); }
+
+      .sheet-handle {
+        display: flex;
+        justify-content: center;
+        padding: 8px 0 4px;
+        cursor: pointer;
+      }
+
+      .sheet-handle::before {
+        content: '';
+        width: 40px;
+        height: 4px;
+        background: var(--border-strong);
+        border-radius: 2px;
+      }
+
+      .panel-header { padding: 4px 16px 14px; }
+      .panel-title { font-size: 28px; }
+      .panel-subtitle { font-size: 10px; margin-bottom: 14px; }
+      .pill { padding: 8px 10px; font-size: 12px; }
+      .item { padding: 14px 16px; }
+      .item-name { font-size: 18px; }
+      .detail-content { padding: 16px; }
+      .detail-name { font-size: 32px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="index.html" class="brand">
+      <span class="brand-name">aus-<em>mx</em></span>
+    </a>
+    <nav>
+      <a href="index.html" class="active">Map</a>
+      <a href="submit.html">Submit</a>
+      <a href="#" class="coming-soon">Coaches</a>
+      <a href="#" class="coming-soon">Events</a>
+    </nav>
+  </header>
+
+  <main>
+    <aside id="panel">
+      <div class="sheet-handle" id="sheetHandle"></div>
+
+      <div class="panel-header">
+        <h1 class="panel-title">Tracks &amp; Clubs</h1>
+        <div class="panel-subtitle"><span class="count" id="count">00</span> · Australia · Live Map</div>
+        <div class="filter-pills">
+          <button class="pill active" data-filter="all">All</button>
+          <button class="pill" data-filter="track"><span class="dot"></span>Tracks</button>
+          <button class="pill" data-filter="club"><span class="dot"></span>Clubs</button>
+        </div>
+      </div>
+
+      <div class="list" id="list"></div>
+      <div class="detail" id="detail"></div>
+    </aside>
+
+    <div id="map"></div>
+  </main>
+
+  <script>
+    // ===========================================================
+    // LOCATION DATA — edit this array to add/remove tracks & clubs
+    //
+    // types: array — can include 'track' and/or 'club'
+    //   ['track']           → a riding venue only
+    //   ['club']            → a club only (no riding venue)
+    //   ['track', 'club']   → operates both (e.g. Appin MX Park)
+    //
+    // Coordinates: [latitude, longitude]
+    // Tip: right-click in Google Maps → click the lat/long that pops up to copy.
+    // ===========================================================
+    const LOCATIONS = [
+      {
+        name: "Appin MX Park",
+        types: ["track", "club"],
+        state: "NSW",
+        coords: [-34.2014, 150.7869],
+        description: "Run by Appin Motorcycle Club. One of Sydney's most accessible motocross parks, with social ride days as well as senior, junior and pee-wee tracks.",
+        facilities: ["Senior MX track", "Junior track", "Pee-wee track", "Social ride days", "Canteen"],
+        website: "https://www.appinmxpark.com.au"
+      },
+      {
+        name: "Maitland Motorcycle Club",
+        types: ["club", "track"],
+        state: "NSW",
+        coords: [-32.7395, 151.5563],
+        description: "Hunter Valley club operating its own circuit. Hosts ProMX rounds, club racing, coaching and open practice days.",
+        facilities: ["MX track", "Club rounds", "Coaching", "Junior dev"],
+        website: ""
+      },
+      {
+        name: "Penrith District MCC",
+        types: ["club", "track"],
+        state: "NSW",
+        coords: [-33.7510, 150.6940],
+        description: "Western Sydney club with its own MX facility. Active junior development program and regular practice days.",
+        facilities: ["MX track", "Junior dev", "Club rounds", "Open practice"],
+        website: ""
+      },
+      {
+        name: "Wonthaggi MX Track",
+        types: ["track"],
+        state: "VIC",
+        coords: [-38.6079, 145.5944],
+        description: "Coastal Victorian track that has hosted rounds of the Australian ProMX Championship. Known for sandy soil and demanding layout.",
+        facilities: ["MX1/MX2 layout", "Spectator viewing", "ProMX-grade"],
+        website: ""
+      },
+      {
+        name: "Coolum Pines MX",
+        types: ["track"],
+        state: "QLD",
+        coords: [-26.5363, 153.0809],
+        description: "Sunshine Coast track with a long history of national-level events. Hardpack terrain in pine forest setting.",
+        facilities: ["Senior track", "Pee-wee track", "MX schools"],
+        website: ""
+      },
+      {
+        name: "Sunshine Coast MCC",
+        types: ["club"],
+        state: "QLD",
+        coords: [-26.6500, 153.0700],
+        description: "Active club in SE Queensland running club rounds and ride days at affiliated venues.",
+        facilities: ["Club rounds", "Junior days"],
+        website: ""
+      },
+      {
+        name: "Echo Valley MX (Toowoomba)",
+        types: ["track", "club"],
+        state: "QLD",
+        coords: [-27.5500, 151.9500],
+        description: "Toowoomba district circuit with a strong club following. Regular practice days and rounds.",
+        facilities: ["Senior track", "Junior track", "Canteen"],
+        website: ""
+      },
+      {
+        name: "Gillman MX",
+        types: ["track"],
+        state: "SA",
+        coords: [-34.8200, 138.5500],
+        description: "Adelaide's premier metropolitan motocross venue. Run by Motorcycling SA with regular practice days and state rounds.",
+        facilities: ["Senior track", "Junior track", "Practice days"],
+        website: ""
+      },
+      {
+        name: "Murray Bridge MX",
+        types: ["track"],
+        state: "SA",
+        coords: [-35.1167, 139.2667],
+        description: "Long-running SA venue ~80km from Adelaide. Has hosted national rounds.",
+        facilities: ["MX track", "Junior track", "Practice"],
+        website: ""
+      },
+      {
+        name: "Pinjar Park (Wanneroo)",
+        types: ["track"],
+        state: "WA",
+        coords: [-31.6500, 115.8500],
+        description: "Perth's main motocross facility. Sandy WA soil, multiple track configurations and a hub for the state's racing scene.",
+        facilities: ["MX track", "Supercross track", "Mini track"],
+        website: ""
+      },
+      {
+        name: "Manjimup MX",
+        types: ["track"],
+        state: "WA",
+        coords: [-34.2406, 116.1462],
+        description: "Iconic WA track in the south-west. Home of the legendary Manjimup 15,000 endurance event.",
+        facilities: ["MX track", "Endurance event"],
+        website: ""
+      },
+      {
+        name: "Broadford State Motorcycle Sports Complex",
+        types: ["track"],
+        state: "VIC",
+        coords: [-37.2050, 145.0500],
+        description: "Multi-discipline complex an hour north of Melbourne. Includes MX, supercross, road race, dirt track and more.",
+        facilities: ["MX", "Supercross", "Multi-discipline", "MA HQ"],
+        website: ""
+      },
+      {
+        name: "Tamworth MX",
+        types: ["track"],
+        state: "NSW",
+        coords: [-31.0833, 150.9167],
+        description: "Regional NSW track popular with riders from across the New England area.",
+        facilities: ["MX track", "Junior track"],
+        website: ""
+      }
+    ];
+
+    // ===========================================================
+    // App state
+    // ===========================================================
+    let currentFilter = 'all';
+    let currentLocation = null;
+    const markers = new Map();
+
+    // ===========================================================
+    // Map setup — CartoDB Dark Matter (free, no API key)
+    // ===========================================================
+    const map = L.map('map', {
+      zoomControl: true,
+      attributionControl: true,
+      preferCanvas: true
+    }).setView([-26.5, 134.5], 4);
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · © <a href="https://carto.com/attributions">CARTO</a>',
+      subdomains: 'abcd',
+      maxZoom: 19
+    }).addTo(map);
+
+    // ===========================================================
+    // Build a pin div for a location
+    // ===========================================================
+    function buildPinHtml(loc, idx) {
+      const isTrack = loc.types.includes('track');
+      const isClub = loc.types.includes('club');
+      const cls = isTrack && isClub ? 'pin-both' : isTrack ? 'pin-track' : 'pin-club';
+
+      let inner = '';
+      if (isTrack) inner += '<div class="shape-track"></div>';
+      if (isClub) inner += '<div class="shape-club"></div>';
+
+      return `<div class="pin ${cls}" data-idx="${idx}">${inner}</div>`;
+    }
+
+    // ===========================================================
+    // Add markers
+    // ===========================================================
+    LOCATIONS.forEach((loc, idx) => {
+      const icon = L.divIcon({
+        className: '',
+        html: buildPinHtml(loc, idx),
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+      });
+
+      const marker = L.marker(loc.coords, { icon }).addTo(map);
+      marker.on('click', () => selectLocation(idx));
+      markers.set(idx, marker);
+    });
+
+    // ===========================================================
+    // Render list
+    // ===========================================================
+    const listEl = document.getElementById('list');
+    const detailEl = document.getElementById('detail');
+    const countEl = document.getElementById('count');
+
+    function primaryType(loc) { return loc.types[0]; }
+
+    function renderList() {
+      const filtered = LOCATIONS
+        .map((loc, idx) => ({ loc, idx }))
+        .filter(({ loc }) => currentFilter === 'all' || loc.types.includes(currentFilter));
+
+      countEl.textContent = String(filtered.length).padStart(2, '0');
+
+      listEl.innerHTML = filtered.map(({ loc, idx }) => `
+        <div class="item ${currentLocation === idx ? 'active' : ''}"
+             data-idx="${idx}"
+             data-primary="${primaryType(loc)}">
+          <div class="item-num">${String(idx + 1).padStart(2, '0')}</div>
+          <div class="item-body">
+            <div class="item-name">${loc.name}</div>
+            <div class="item-meta">
+              ${loc.types.map(t => `<span class="badge badge-${t}">${t}</span>`).join('')}
+              <span class="item-state">${loc.state}</span>
+            </div>
+          </div>
+        </div>
+      `).join('');
+
+      listEl.querySelectorAll('.item').forEach(el => {
+        el.addEventListener('click', () => {
+          const idx = parseInt(el.dataset.idx, 10);
+          selectLocation(idx);
+        });
+      });
+
+      // Update marker visibility
+      LOCATIONS.forEach((loc, idx) => {
+        const marker = markers.get(idx);
+        const visible = currentFilter === 'all' || loc.types.includes(currentFilter);
+        if (visible) {
+          if (!map.hasLayer(marker)) marker.addTo(map);
+        } else {
+          if (map.hasLayer(marker)) map.removeLayer(marker);
+        }
+      });
+    }
+
+    // ===========================================================
+    // Render detail view
+    // ===========================================================
+    function renderDetail(idx) {
+      const loc = LOCATIONS[idx];
+
+      const websiteHtml = loc.website
+        ? `<a href="${loc.website}" target="_blank" rel="noopener noreferrer" class="detail-link">Visit website →</a>`
+        : `<div class="detail-coords">No website on file</div>`;
+
+      detailEl.innerHTML = `
+        <button class="detail-back" id="backBtn">← Back to list</button>
+        <div class="detail-content">
+          <h2 class="detail-name">${loc.name}</h2>
+          <div class="detail-badges">
+            ${loc.types.map(t => `<span class="badge badge-${t}">${t}</span>`).join('')}
+            <span class="badge" style="background: var(--bg-elev-2); color: var(--text); border: 1px solid var(--border-strong);">${loc.state}</span>
+          </div>
+          <p class="detail-desc">${loc.description}</p>
+
+          ${loc.facilities && loc.facilities.length ? `
+            <div class="detail-section">
+              <div class="detail-section-title">Facilities</div>
+              <div class="chips">
+                ${loc.facilities.map(f => `<span class="chip">${f}</span>`).join('')}
+              </div>
+            </div>
+          ` : ''}
+
+          <div class="detail-section">
+            <div class="detail-section-title">Location</div>
+            <div class="detail-coords">${loc.coords[0].toFixed(4)}°, ${loc.coords[1].toFixed(4)}°</div>
+          </div>
+
+          <div class="detail-section">
+            ${websiteHtml}
+          </div>
+        </div>
+      `;
+
+      document.getElementById('backBtn').addEventListener('click', clearSelection);
+    }
+
+    // ===========================================================
+    // Selection state
+    // ===========================================================
+    function selectLocation(idx) {
+      currentLocation = idx;
+      const loc = LOCATIONS[idx];
+
+      document.querySelectorAll('.pin').forEach(p => p.classList.remove('active'));
+      const pinEl = document.querySelector(`.pin[data-idx="${idx}"]`);
+      if (pinEl) pinEl.classList.add('active');
+
+      listEl.classList.add('hide');
+      detailEl.classList.add('show');
+      renderDetail(idx);
+
+      map.flyTo(loc.coords, Math.max(map.getZoom(), 7), { duration: 0.6 });
+
+      const panel = document.getElementById('panel');
+      panel.classList.add('detail-mode');
+    }
+
+    function clearSelection() {
+      currentLocation = null;
+      document.querySelectorAll('.pin').forEach(p => p.classList.remove('active'));
+      listEl.classList.remove('hide');
+      detailEl.classList.remove('show');
+      renderList();
+
+      const panel = document.getElementById('panel');
+      panel.classList.remove('detail-mode');
+    }
+
+    // ===========================================================
+    // Filter pills
+    // ===========================================================
+    document.querySelectorAll('.pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+        pill.classList.add('active');
+        currentFilter = pill.dataset.filter;
+
+        if (currentLocation !== null) {
+          const sel = LOCATIONS[currentLocation];
+          if (currentFilter !== 'all' && !sel.types.includes(currentFilter)) {
+            clearSelection();
+          }
+        }
+
+        renderList();
+      });
+    });
+
+    // ===========================================================
+    // Mobile bottom sheet handle
+    // ===========================================================
+    document.getElementById('sheetHandle').addEventListener('click', () => {
+      const panel = document.getElementById('panel');
+      panel.classList.toggle('expanded');
+    });
+
+    // ===========================================================
+    // Initial render
+    // ===========================================================
+    renderList();
+  </script>
+</body>
+</html>
